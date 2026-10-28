@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Singapore PSI by area from NEA (data.gov.sg) and Open-Meteo weather for Singapore and 15 ASEAN and Taiwan cities.">
+<meta name="theme-color" content="#0E1012">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23E8A558%27 stroke-width=%271.8%27 stroke-linecap=%27round%27%3E%3Ccircle cx=%2712%27 cy=%278%27 r=%273.2%27/%3E%3Cpath d=%27M4 14h16M6.5 18h11%27/%3E%3C/svg%3E">
+<title>Haze Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;500;600&family=EB+Garamond:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: dark-first editorial dashboard with two tabs. Singapore tab: haze card (map + detail panel), then Singapore weather.
+   ASEAN tab: illustrated weather cards, filterable by condition.
+   Type: EB Garamond for titles and big numerals, DM Mono for labels and readings, DM Sans for running text.
+   Colour: neutral ink surfaces, five haze bands as the only saturated UI colours, one amber accent for focus, tabs and the "Now" marker.
+   Weather illustrations are inline SVG scenes with their own sky colours. */
+:root{
+  --bg:#0E1012; --card:#181B1E; --panel:#121416; --line:#2A2F34; --line-2:#353B41;
+  --fg:#ECEEEF; --fg-2:#C9CDD1; --fg-3:#8D949B;
+  --accent:#E8A558; --ring:#ECEEEF;
+  --good:#5FAE8C; --mod:#E2B93B; --unh:#E5735B; --very:#B07BD6; --haz:#D9567E;
+  --serif:'EB Garamond',Georgia,'Times New Roman',serif;
+  --sans:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'DM Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F3F4F5; --card:#FFFFFF; --panel:#F5F6F7; --line:#DDE0E4; --line-2:#CBD0D5;
+    --fg:#1A1D20; --fg-2:#454B52; --fg-3:#6B737B;
+    --accent:#B65F14; --ring:#1A1D20;
+    --good:#2E8F6B; --mod:#C79A0B; --unh:#D5553A; --very:#8A55C2; --haz:#C23964;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F3F4F5; --card:#FFFFFF; --panel:#F5F6F7; --line:#DDE0E4; --line-2:#CBD0D5;
+  --fg:#1A1D20; --fg-2:#454B52; --fg-3:#6B737B;
+  --accent:#B65F14; --ring:#1A1D20;
+  --good:#2E8F6B; --mod:#C79A0B; --unh:#D5553A; --very:#8A55C2; --haz:#C23964;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1320px; margin:0 auto; padding-block:28px 72px; display:flex; flex-direction:column; gap:28px}
+h1,h2,h3,p,dl,dd,dt{margin:0}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.ic{width:1em; height:1em; display:block; flex:none}
+.mono{font-family:var(--mono)}
+.cap{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--fg-3); font-weight:400}
+
+/* header + tabs */
+.top{display:flex; align-items:center; justify-content:space-between; gap:16px 24px; flex-wrap:wrap; padding:4px 0 0}
+.brand h1{font-family:var(--serif); font-weight:400; font-size:30px; line-height:1; letter-spacing:.005em}
+.brand p{margin-top:6px}
+.seg{display:inline-flex; flex-wrap:wrap; border:1px solid var(--line-2); border-radius:8px; padding:2px; gap:2px; background:var(--panel)}
+.seg button{border:0; background:transparent; padding:5px 12px; border-radius:6px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; color:var(--fg-3)}
+.seg button[aria-pressed="true"]{background:var(--card); color:var(--accent); box-shadow:0 0 0 1px var(--line-2)}
+.seg button:not([aria-pressed="true"]):hover{color:var(--fg)}
+.seg .n{margin-left:6px; color:var(--fg-3); font-variant-numeric:tabular-nums}
+.tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); overflow-x:auto}
+.tab{background:transparent; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; padding:12px 16px; font-family:var(--mono); font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-3); white-space:nowrap}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
+.view{display:flex; flex-direction:column; gap:28px; min-width:0}
+.view[hidden]{display:none}
+
+/* ---------- Haze card (sized in units of a 1547px-wide design) ---------- */
+.haze{container-type:inline-size; background:var(--card); border:1px solid var(--line); border-radius:12px}
+.haze-in{--u:max(.62px, calc(100cqw / 1547)); padding:calc(var(--u) * 40)}
+.haze .eb{font-family:var(--mono); font-size:max(10.5px, calc(var(--u) * 15)); letter-spacing:.17em; text-transform:uppercase; color:var(--fg-3)}
+.haze h2{font-family:var(--serif); font-weight:400; font-size:max(28px, calc(var(--u) * 40)); line-height:1.1; margin:calc(var(--u) * 12) 0 calc(var(--u) * 28)}
+.haze-grid{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:calc(var(--u) * 23)}
+@container (max-width: 940px){ .haze-grid{grid-template-columns:minmax(0,1fr)} }
+.map-panel{border:1px solid var(--line-2); border-radius:max(6px, calc(var(--u) * 8)); background:var(--panel); overflow-x:auto; min-width:0}
+.map-panel svg{display:block; width:100%; min-width:600px; height:auto}
+.region{fill:color-mix(in srgb, var(--c) 42%, var(--panel)); stroke:var(--panel); stroke-width:2.2; stroke-linejoin:round; cursor:pointer; transition:fill .15s}
+.region:hover{fill:color-mix(in srgb, var(--c) 52%, var(--panel))}
+.map-note{font-family:var(--mono); font-size:12.5px; letter-spacing:.17em; text-transform:uppercase; fill:var(--fg-3)}
+.leader{stroke:var(--fg-3); stroke-width:1.5; stroke-dasharray:1 5; stroke-linecap:round}
+.leader-dot{fill:var(--fg-3)}
+.mk{cursor:pointer; outline:none}
+.mk .box{fill:var(--card); stroke:var(--c); stroke-width:1.6; transition:fill .15s}
+.mk:hover .box{fill:color-mix(in srgb, var(--c) 10%, var(--card))}
+.mk .ring{fill:none; stroke:var(--ring); stroke-width:2; opacity:0}
+.mk.sel .ring{opacity:1}
+.mk .focus{fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:4 3; opacity:0}
+.mk:focus-visible .focus{opacity:1}
+.mk-name{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; fill:var(--fg-3); text-anchor:middle}
+.mk-num{font-family:var(--serif); font-size:46px; fill:var(--fg); text-anchor:middle; font-variant-numeric:oldstyle-nums}
+.mk-lab{font-family:var(--sans); font-size:15px; fill:var(--fg-2); text-anchor:middle}
+
+.dp{border:1px solid var(--line-2); border-radius:max(6px, calc(var(--u) * 8)); background:var(--card); padding:calc(var(--u) * 29) calc(var(--u) * 29) calc(var(--u) * 34); min-width:0}
+.dp-num{display:flex; align-items:baseline; flex-wrap:wrap; gap:0 calc(var(--u) * 28); margin-top:calc(var(--u) * 30)}
+.big{font-family:var(--serif); font-weight:400; font-size:max(72px, calc(var(--u) * 118)); line-height:1.02; letter-spacing:-.02em; font-variant-numeric:oldstyle-nums}
+.band{display:inline-flex; align-items:center; gap:calc(var(--u) * 12); font-size:max(15px, calc(var(--u) * 21))}
+.band i{width:max(10px, calc(var(--u) * 14)); height:max(10px, calc(var(--u) * 14)); border-radius:50%; background:var(--c)}
+.scale{display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:calc(var(--u) * 6); margin-top:calc(var(--u) * 8)}
+.scale .trk{height:max(12px, calc(var(--u) * 16)); display:flex; align-items:center}
+.scale .pl{width:100%; height:max(5px, calc(var(--u) * 8)); border-radius:99px; background:color-mix(in srgb, var(--c) 34%, transparent)}
+.scale .on .pl{height:100%; background:var(--c)}
+.scale .lb{display:block; text-align:right; margin-top:calc(var(--u) * 10); font-family:var(--mono); font-size:max(10.5px, calc(var(--u) * 15)); color:var(--fg-3)}
+.advice{margin-top:calc(var(--u) * 28); font-size:max(15px, calc(var(--u) * 21)); line-height:1.62; color:var(--fg-2); max-width:34em}
+.dstats{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:calc(var(--u) * 17) calc(var(--u) * 27); margin-top:calc(var(--u) * 30)}
+.dstats > div{border-top:1px solid var(--line-2); padding-top:calc(var(--u) * 16)}
+.dstats dt{font-family:var(--mono); font-size:max(10.5px, calc(var(--u) * 14)); letter-spacing:.16em; text-transform:uppercase; color:var(--fg-3)}
+.dstats dd{font-family:var(--mono); font-size:max(15px, calc(var(--u) * 22)); margin-top:calc(var(--u) * 8)}
+.legend{display:flex; flex-wrap:wrap; gap:calc(var(--u) * 12) calc(var(--u) * 34); margin-top:calc(var(--u) * 28); font-size:max(13px, calc(var(--u) * 20)); color:var(--fg-2)}
+.legend span{display:inline-flex; align-items:center; gap:calc(var(--u) * 11)}
+.legend i{width:max(10px, calc(var(--u) * 14)); height:max(10px, calc(var(--u) * 14)); border-radius:3px; background:var(--c)}
+.haze-foot{margin-top:calc(var(--u) * 22); font-size:max(12.5px, calc(var(--u) * 18)); color:var(--fg-3); line-height:1.55}
+
+/* ---------- Weather ---------- */
+.card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:32px; min-width:0}
+.card h2{font-family:var(--serif); font-weight:400; font-size:36px; line-height:1.1; margin:10px 0 24px}
+.wx-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); gap:20px}
+.panel{border:1px solid var(--line-2); border-radius:8px; padding:26px; min-width:0}
+.panel.deep{background:var(--panel)}
+.panel.img{padding:0; overflow:hidden}
+.pbody{padding:22px 26px 26px}
+
+/* weather illustration banner */
+.ban{position:relative; height:132px; background:#8EA3B5; overflow:hidden}
+.ban.tall{height:168px}
+.ban svg{position:absolute; inset:0; width:100%; height:100%; display:block}
+.ban .chip{position:absolute; top:12px; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:#fff; background:rgba(12,14,16,.55); border-radius:6px; padding:4px 9px}
+.ban .chip.l{left:12px}
+.ban .chip.r{right:12px}
+
+.now-temp{font-family:var(--serif); font-size:84px; line-height:1; letter-spacing:-.02em; font-variant-numeric:oldstyle-nums}
+.now-row{display:flex; align-items:flex-end; justify-content:space-between; gap:16px}
+.now-cond{margin-top:8px; color:var(--fg-2); font-size:16px}
+.hl{font-family:var(--mono); font-size:12.5px; color:var(--fg-3); text-align:right; line-height:1.7}
+.mstats{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px 16px; margin-top:24px}
+.mstats > div{border-top:1px solid var(--line-2); padding-top:12px; min-width:0}
+.mstats dt{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-3)}
+.mstats dd{font-family:var(--mono); font-size:16.5px; margin-top:6px}
+.mstats dd small{display:block; font-family:var(--sans); font-size:12px; color:var(--fg-3); margin-top:1px}
+.suntimes{display:flex; justify-content:space-between; gap:12px; margin-top:20px; padding-top:14px; border-top:1px solid var(--line-2); font-family:var(--mono); font-size:12px; color:var(--fg-3)}
+.hours{display:flex; gap:8px; overflow-x:auto; margin-top:16px; padding-bottom:4px}
+.hr{flex:1 0 78px; border:1px solid var(--line); border-radius:8px; padding:12px 8px; display:flex; flex-direction:column; align-items:center; gap:8px; background:var(--card)}
+.hr.now{border-color:var(--accent)}
+.hr .t{font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; color:var(--fg-3); text-transform:uppercase}
+.hr.now .t{color:var(--accent)}
+.hr .ic{font-size:26px; color:var(--fg-2)}
+.hr .d{font-family:var(--serif); font-size:28px; line-height:1; font-variant-numeric:oldstyle-nums}
+.hr .r{font-family:var(--mono); font-size:11.5px; color:var(--fg-3)}
+.hr-note{margin-top:14px; font-size:12.5px; color:var(--fg-3)}
+
+/* ---------- ASEAN tab ---------- */
+.sec-head p{color:var(--fg-2); max-width:66ch; margin-top:-8px; margin-bottom:22px}
+.controls{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; margin-bottom:20px}
+.search{flex:1 1 220px; max-width:320px}
+.search input,.sort select{width:100%; font:inherit; font-size:14px; color:var(--fg); background:var(--panel); border:1px solid var(--line-2); border-radius:8px; padding:9px 14px; min-height:40px}
+.search input::placeholder{color:var(--fg-3)}
+.sort{display:flex; align-items:center; gap:10px}
+.sort select{width:auto}
+.grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:16px}
+.city{padding:0; overflow:hidden; display:flex; flex-direction:column}
+.cbody{padding:18px 22px 22px; display:flex; flex-direction:column; gap:16px; flex:1}
+.city h3{font-family:var(--serif); font-weight:400; font-size:28px; line-height:1.1; margin-top:6px}
+.tline{display:flex; justify-content:space-between; align-items:flex-end; gap:12px}
+.tline .tmp{font-family:var(--serif); font-size:52px; line-height:1; letter-spacing:-.02em; font-variant-numeric:oldstyle-nums}
+.tline .cd{font-size:13.5px; color:var(--fg-2); margin-top:4px}
+.mini{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px 12px}
+.mini > div{border-top:1px solid var(--line-2); padding-top:10px; min-width:0}
+.mini dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-3)}
+.mini dd{font-family:var(--mono); font-size:14.5px; margin-top:4px}
+.mini dd small{display:block; font-family:var(--sans); font-size:11.5px; color:var(--fg-3)}
+.sun{display:flex; justify-content:space-between; gap:8px; font-family:var(--mono); font-size:11.5px; color:var(--fg-3); border-top:1px solid var(--line-2); padding-top:12px; margin-top:auto}
+.sg-haze{display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--fg-2)}
+.sg-haze i{width:9px; height:9px; border-radius:50%; background:var(--c); flex:none}
+.empty{grid-column:1/-1; padding:40px 0; text-align:center; color:var(--fg-3)}
+.foot{font-size:12.5px; color:var(--fg-3); max-width:90ch; line-height:1.6}
+
+@media (max-width:900px){ .wx-grid{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:560px){ .card{padding:22px} .panel{padding:20px} .pbody{padding:18px 20px 22px} .now-temp{font-size:68px} .card h2{font-size:30px} .mstats{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="g-clear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3F8FDB"/><stop offset="1" stop-color="#BFE3F7"/></linearGradient>
+    <linearGradient id="g-partly" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5AA5E4"/><stop offset="1" stop-color="#CDE8F7"/></linearGradient>
+    <linearGradient id="g-cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7B90A6"/><stop offset="1" stop-color="#C5CFD9"/></linearGradient>
+    <linearGradient id="g-drizzle" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#667A8E"/><stop offset="1" stop-color="#B3BFCB"/></linearGradient>
+    <linearGradient id="g-rain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4C5B70"/><stop offset="1" stop-color="#94A2B1"/></linearGradient>
+    <linearGradient id="g-storm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262C45"/><stop offset="1" stop-color="#666B88"/></linearGradient>
+    <linearGradient id="g-fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A5AFB8"/><stop offset="1" stop-color="#DDE1E5"/></linearGradient>
+    <radialGradient id="g-glow"><stop offset="0" stop-color="#FFF3B0" stop-opacity=".95"/><stop offset="1" stop-color="#FFE27A" stop-opacity="0"/></radialGradient>
+    <symbol id="cl" viewBox="0 0 120 60"><circle cx="34" cy="38" r="16"/><circle cx="58" cy="28" r="22"/><circle cx="86" cy="36" r="17"/><rect x="22" y="38" width="76" height="16" rx="8"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/></symbol>
+    <symbol id="i-partly" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8" r="2.8"/><path d="M8.5 2.5v1.2M3 8h1.2M4.6 4.1l.85.85M12.4 4.1l-.85.85"/><path d="M9.5 19.5h8a3.2 3.2 0 0 0 .3-6.38 4.5 4.5 0 0 0-8.6 1.2 2.6 2.6 0 0 0 .3 5.18z"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 18.5h9a3.75 3.75 0 0 0 .4-7.48A5.25 5.25 0 0 0 6.7 12 3.25 3.25 0 0 0 7.5 18.5z"/></symbol>
+    <symbol id="i-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 15.5h9a3.75 3.75 0 0 0 .4-7.48A5.25 5.25 0 0 0 6.7 9 3.25 3.25 0 0 0 7.5 15.5z"/><path d="M8.5 18.5l-1 2.2M12.5 18.5l-1 2.2M16.5 18.5l-1 2.2"/></symbol>
+    <symbol id="i-storm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 15.5h9a3.75 3.75 0 0 0 .4-7.48A5.25 5.25 0 0 0 6.7 9 3.25 3.25 0 0 0 7.5 15.5z"/><path d="M12.8 16l-2.2 3.2h3.1l-2.2 3"/></symbol>
+    <symbol id="i-fog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16M6.5 12.5h11M4 16.5h16M8 20h8"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Haze Watch</h1>
+      <p class="cap">Wed 28 Oct 2026 · Haze reading 10:00 SGT · Weather 10:30 SGT</p>
+    </div>
+    <div class="seg" role="group" aria-label="Temperature unit">
+      <button type="button" data-unit="C" aria-pressed="true">°C</button>
+      <button type="button" data-unit="F" aria-pressed="false">°F</button>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button type="button" class="tab" role="tab" id="tab-singapore" data-tab="singapore" aria-selected="true" aria-controls="view-singapore">Singapore haze and weather</button>
+    <button type="button" class="tab" role="tab" id="tab-asean" data-tab="asean" aria-selected="false" aria-controls="view-asean" tabindex="-1">ASEAN weather</button>
+  </div>
+
+  <main style="display:contents">
+    <div class="view" id="view-singapore" role="tabpanel" aria-labelledby="tab-singapore">
+      <section class="haze" aria-labelledby="haze-title">
+        <div class="haze-in">
+          <div class="eb">Singapore · NEA 24-hour PSI</div>
+          <h2 id="haze-title">PSI by area</h2>
+          <div class="haze-grid">
+            <div class="map-panel" id="map"></div>
+            <div class="dp" id="detail"></div>
+          </div>
+          <div class="legend" id="legend"></div>
+          <p class="haze-foot" id="hazefoot"></p>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="wx-title">
+        <div class="cap">Singapore · Open-Meteo</div>
+        <h2 id="wx-title">Weather in Singapore</h2>
+        <div class="wx-grid">
+          <div class="panel img" id="wxnow"></div>
+          <div class="panel deep" id="wxhours"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="view" id="view-asean" role="tabpanel" aria-labelledby="tab-asean" hidden>
+      <section class="card" style="padding-bottom:28px" aria-labelledby="as-title">
+        <div class="sec-head">
+          <div class="cap">ASEAN and Taiwan · Open-Meteo</div>
+          <h2 id="as-title">Weather across the region</h2>
+          <p>Current conditions, today's range and rain chance for 16 cities. Haze readings are published for Singapore only, so the other cities show weather alone.</p>
+        </div>
+        <div class="controls">
+          <div class="search"><input id="q" type="search" placeholder="Search city or country" aria-label="Search city or country" autocomplete="off"></div>
+          <div class="seg" role="group" aria-label="Filter by condition" id="chips"></div>
+          <label class="sort"><span class="cap">Sort</span>
+            <select id="sort">
+              <option value="default">Default order</option>
+              <option value="name">City, A to Z</option>
+              <option value="hot">Hottest first</option>
+              <option value="humid">Most humid first</option>
+              <option value="rain">Highest rain chance</option>
+              <option value="wind">Windiest first</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid" id="cities"></div>
+      </section>
+    </div>
+
+    <p class="foot" id="sources"></p>
+  </main>
+</div>
+
+<script>
+(function(){
+  /* ===== Data snapshot =====
+     Haze: NEA real-time PSI, https://api-open.data.gov.sg/v2/real-time/api/psi (reading 2026-10-28 10:00 SGT, updated 10:15:38 SGT).
+     Weather: Open-Meteo forecast API, current conditions plus today's daily values (retrieved 2026-10-28 around 10:30 SGT). */
+  var READING='10:00', UPDATED='10:15';
+
+  var BANDS=[
+    {label:'Good',max:50,c:'--good',range:'0–50',cut:'50',advice:'Air is clean. Enjoy the outdoors as usual.'},
+    {label:'Moderate',max:100,c:'--mod',range:'51–100',cut:'100',advice:'Air is acceptable. Normal activity is fine; unusually sensitive people may notice mild irritation.'},
+    {label:'Unhealthy',max:200,c:'--unh',range:'101–200',cut:'200',advice:'Everyone may start to feel effects. Cut back on strenuous outdoor activity; sensitive groups should stay indoors where possible.'},
+    {label:'Very unhealthy',max:300,c:'--very',range:'201–300',cut:'300',advice:'Avoid outdoor exertion. Wear an N95 mask outside and keep windows closed.'},
+    {label:'Hazardous',max:Infinity,c:'--haz',range:'301+',cut:'300+',advice:'Stay indoors and avoid all outdoor activity.'}
+  ];
+  function bandIdx(v){for(var i=0;i<BANDS.length;i++){if(v<=BANDS[i].max)return i}return BANDS.length-1}
+  var POLL={pm25:'PM2.5',pm10:'PM10',o3:'O₃',so2:'SO₂',co:'CO'};
+
+  var AREAS=[
+    {id:'north',name:'North',eg:'Woodlands, Sembawang, Yishun',psi:78,pm25:36,pm10:50,sub:{pm25:78,pm10:50,o3:18,so2:6,co:9},cx:441,cy:123,
+     d:'M313,99 L372,66 L406,58 L484,88 L549,144 L588,149 L588,209 L313,209 Z'},
+    {id:'west',name:'West',eg:'Jurong, Tuas, Clementi',psi:78,pm25:36,pm10:51,sub:{pm25:78,pm10:51,o3:11,so2:3,co:6},cx:192,cy:279,
+     d:'M313,99 L279,97 L237,103 L155,183 L79,284 L67,353 L92,421 L313,403 Z'},
+    {id:'central',name:'Central',eg:'Toa Payoh, Bishan, Orchard',psi:78,pm25:36,pm10:50,sub:{pm25:78,pm10:50,o3:10,so2:4,co:9},cx:434,cy:271,
+     d:'M313,209 L588,209 L588,346 L313,346 Z'},
+    {id:'east',name:'East',eg:'Changi, Tampines, Pasir Ris',psi:74,pm25:32,pm10:52,sub:{pm25:74,pm10:52,o3:15,so2:5,co:9},cx:676,cy:279,
+     d:'M588,149 L628,161 L675,224 L717,245 L795,269 L790,315 L777,335 L677,346 L619,358 L588,349 Z'},
+    {id:'south',name:'South',eg:'Marina Bay, Sentosa, Bukit Merah',psi:67,pm25:26,pm10:41,sub:{pm25:67,pm10:41,o3:13,so2:3,co:9},cx:441,cy:519,
+     d:'M313,346 L588,346 L588,349 L559,355 L501,377 L487,407 L439,421 L366,421 L313,403 Z',
+     extra:'M401,439 L424,431 L466,433 L492,439 L469,449 L439,455 L409,453 Z', leader:[441,390]}
+  ];
+
+  var COUNTRY={SG:'Singapore',MY:'Malaysia',ID:'Indonesia',TH:'Thailand',VN:'Vietnam',PH:'Philippines',KH:'Cambodia',LA:'Laos',MM:'Myanmar',BN:'Brunei',TW:'Taiwan'};
+  /* name, country, temp °C, humidity %, feels-like °C, wind km/h, wind dir °, WMO code, cloud cover %, rain mm,
+     high °C, low °C, rain chance % (day max), UV max, sunrise, sunset, local reading time */
+  var CITIES=[
+    ['Singapore','SG',28.8,78,35.0,3.0,327,3,99,0.0,31.5,23.7,94,5.05,'06:46','18:50','10:30'],
+    ['Kuala Lumpur','MY',27.1,83,32.8,2.2,132,3,99,0.0,29.8,24.3,88,5.70,'06:56','18:57','10:30'],
+    ['Kuching','MY',28.8,81,34.8,5.1,94,51,96,0.1,31.7,24.1,100,9.00,'06:20','18:24','10:30'],
+    ['Jakarta','ID',31.3,61,36.8,4.1,23,2,70,0.0,32.4,24.9,99,8.20,'05:27','17:45','09:30'],
+    ['Pekanbaru','ID',27.5,82,33.0,4.4,308,51,99,0.1,28.9,24.2,84,8.30,'05:55','18:01','09:30'],
+    ['Palangka Raya','ID',30.1,71,36.4,4.4,60,3,100,0.0,32.6,23.7,97,7.90,'05:02','17:13','09:30'],
+    ['Bangkok','TH',28.6,76,33.8,6.9,37,1,20,0.0,31.8,23.7,94,7.90,'06:11','17:52','09:30'],
+    ['Chiang Mai','TH',26.5,72,30.5,2.5,21,1,23,0.0,30.5,22.2,92,7.35,'06:22','17:52','09:30'],
+    ['Hanoi','VN',28.4,59,31.1,9.0,35,0,0,0.0,31.1,23.9,10,7.10,'05:57','17:23','09:30'],
+    ['Ho Chi Minh City','VN',30.1,69,36.2,6.1,45,0,11,0.0,33.2,25.0,69,8.30,'05:43','17:30','09:30'],
+    ['Manila','PH',32.2,52,35.4,13.6,55,3,83,0.0,34.8,27.9,41,7.95,'05:50','17:29','10:30'],
+    ['Phnom Penh','KH',28.6,79,34.5,3.9,22,2,72,0.0,31.9,25.1,59,7.20,'05:51','17:36','09:30'],
+    ['Vientiane','LA',27.7,72,32.7,2.6,39,1,22,0.0,30.9,23.5,4,7.20,'06:07','17:39','09:30'],
+    ['Yangon','MM',30.4,67,34.9,9.2,42,0,15,0.0,33.8,25.9,21,7.60,'06:01','17:36','09:00'],
+    ['Bandar Seri Begawan','BN',31.5,63,38.9,2.7,184,3,95,0.0,33.3,24.8,67,8.70,'06:05','18:02','10:30'],
+    ['Taipei','TW',24.4,63,24.0,18.9,66,2,74,0.0,24.8,20.6,55,3.05,'05:58','17:16','10:30']
+  ].map(function(a,i){return {i:i,name:a[0],cc:a[1],t:a[2],rh:a[3],feel:a[4],wind:a[5],dir:a[6],code:a[7],cloud:a[8],rainmm:a[9],hi:a[10],lo:a[11],pop:a[12],uv:a[13],rise:a[14],set:a[15],time:a[16]}});
+
+  /* Singapore hourly from 10:00 SGT: temperature °C, WMO code, rain probability % */
+  var HOURLY=[['10 AM',27.1,51,34],['11 AM',30.5,51,35],['12 PM',30.8,53,49],['1 PM',31.1,53,70],['2 PM',31.4,53,86],
+              ['3 PM',26.4,82,93],['4 PM',26.1,80,94],['5 PM',27.4,51,92],['6 PM',27.2,51,85]];
+
+  /* i: icon, s: illustration, g: filter group (fair, over, wet) */
+  function wmo(c){
+    if(c===0)return {i:'sun',s:'clear',g:'fair',t:'Clear sky'};
+    if(c===1)return {i:'sun',s:'clear',g:'fair',t:'Mainly clear'};
+    if(c===2)return {i:'partly',s:'partly',g:'fair',t:'Partly cloudy'};
+    if(c===3)return {i:'cloud',s:'cloud',g:'over',t:'Overcast'};
+    if(c===45||c===48)return {i:'fog',s:'fog',g:'over',t:'Fog'};
+    if(c===51)return {i:'rain',s:'drizzle',g:'wet',t:'Light drizzle'};
+    if(c===53)return {i:'rain',s:'drizzle',g:'wet',t:'Drizzle'};
+    if(c===55)return {i:'rain',s:'drizzle',g:'wet',t:'Heavy drizzle'};
+    if(c>=56&&c<=57)return {i:'rain',s:'drizzle',g:'wet',t:'Freezing drizzle'};
+    if(c===61)return {i:'rain',s:'rain',g:'wet',t:'Light rain'};
+    if(c===63)return {i:'rain',s:'rain',g:'wet',t:'Rain'};
+    if(c===65)return {i:'rain',s:'rain',g:'wet',t:'Heavy rain'};
+    if(c===80)return {i:'rain',s:'rain',g:'wet',t:'Light showers'};
+    if(c===81)return {i:'rain',s:'rain',g:'wet',t:'Showers'};
+    if(c===82)return {i:'rain',s:'rain',g:'wet',t:'Heavy showers'};
+    if(c>=95)return {i:'storm',s:'storm',g:'wet',t:'Thunderstorm'};
+    return {i:'cloud',s:'cloud',g:'over',t:'Cloudy'};
+  }
+  var GROUPS=[{k:'all',l:'All'},{k:'fair',l:'Fair'},{k:'over',l:'Overcast'},{k:'wet',l:'Wet'}];
+  function cardinal(d){var n=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];return n[Math.round(d/22.5)%16]}
+  function uvLevel(v){var r=Math.round(v);return r<3?'Low':r<6?'Moderate':r<8?'High':r<11?'Very high':'Extreme'}
+
+  /* ===== Weather illustration (inline SVG scene) ===== */
+  function scene(kind,seed){
+    var hills={clear:['#7CC096','#4E9A6E'],partly:['#7CC096','#4E9A6E'],cloud:['#8BA698','#678676'],drizzle:['#6E8E85','#4F6F67'],rain:['#587770','#3F5C56'],storm:['#3D5052','#2B3C3E'],fog:['#B5C3BE','#9DAFA9']}[kind];
+    function cl(x,y,w,fill,op){return '<use href="#cl" x="'+x+'" y="'+y+'" width="'+w+'" height="'+(w/2)+'" fill="'+fill+'" opacity="'+op+'"/>'}
+    function rain(n,len,op){
+      var r='';
+      for(var i=0;i<n;i++){
+        var x=(i*47+seed*29)%340-10, y=48+(i*23+seed*7)%54;
+        r+='<line x1="'+x+'" y1="'+y+'" x2="'+(x-5)+'" y2="'+(y+len)+'" stroke="#DCEBF8" stroke-width="1.4" stroke-linecap="round" opacity="'+op+'"/>';
+      }
+      return r;
+    }
+    var s='<svg viewBox="0 0 320 132" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><rect width="320" height="132" fill="url(#g-'+kind+')"/>';
+    if(kind==='clear'){
+      s+='<circle cx="238" cy="46" r="58" fill="url(#g-glow)"/><circle cx="238" cy="46" r="20" fill="#FFE274"/>'+cl(30,24,90,'#fff',.55);
+    }else if(kind==='partly'){
+      s+='<circle cx="240" cy="42" r="56" fill="url(#g-glow)"/><circle cx="240" cy="42" r="19" fill="#FFE274"/>'+
+         cl(150,34,130,'#fff',.97)+cl(16,18,96,'#fff',.82)+cl(96,60,100,'#fff',.7);
+    }else if(kind==='cloud'){
+      s+=cl(8,16,160,'#DDE3E9',.95)+cl(150,30,190,'#EEF1F4',.98)+cl(-24,50,150,'#CBD3DB',.95);
+    }else if(kind==='drizzle'){
+      s+=cl(8,12,166,'#9FACB9',.97)+cl(150,26,190,'#B6C1CC',.97)+rain(14,12,.55);
+    }else if(kind==='rain'){
+      s+=cl(0,8,176,'#6D7B8B',.99)+cl(140,22,200,'#808D9B',.99)+rain(30,14,.7);
+    }else if(kind==='storm'){
+      s+=cl(0,6,184,'#3E465F',.99)+cl(150,18,190,'#566079',.99)+rain(26,14,.6)+
+         '<polygon points="212,50 196,80 208,80 198,106 226,70 213,70 224,50" fill="#FFD84D"/>';
+    }
+    s+='<path d="M0 132 V96 C40 82 80 100 130 90 S230 76 320 94 V132Z" fill="'+hills[0]+'" opacity=".85"/>'+
+       '<path d="M0 132 V112 C60 100 110 118 170 108 S270 100 320 110 V132Z" fill="'+hills[1]+'"/>';
+    if(kind==='fog'){
+      s+='<rect x="-10" y="30" width="340" height="12" rx="6" fill="#fff" opacity=".5"/><rect x="20" y="52" width="320" height="12" rx="6" fill="#fff" opacity=".42"/>'+
+         '<rect x="-20" y="74" width="330" height="12" rx="6" fill="#fff" opacity=".5"/><rect x="10" y="96" width="320" height="12" rx="6" fill="#fff" opacity=".36"/>';
+    }
+    return s+'</svg>';
+  }
+
+  var S={sel:'central',unit:'C',q:'',sort:'default',group:'all',tab:'singapore'};
+  var $=function(id){return document.getElementById(id)};
+  function T(c){return (S.unit==='F'?Math.round(c*9/5+32):Math.round(c))+'°'}
+  function icon(n){return '<svg class="ic" aria-hidden="true"><use href="#i-'+n+'"/></svg>'}
+  function area(id){return AREAS.filter(function(a){return a.id===id})[0]}
+
+  /* ===== Haze ===== */
+  function mainPollutant(a){
+    var best='pm25';
+    ['pm25','pm10','o3','so2','co'].forEach(function(k){if(a.sub[k]>a.sub[best])best=k});
+    return POLL[best];
+  }
+  function markCard(a){
+    var b=BANDS[bandIdx(a.psi)], on=a.id===S.sel;
+    return '<g class="mk'+(on?' sel':'')+'" data-region="'+a.id+'" tabindex="0" role="button" aria-pressed="'+on+'" aria-label="'+a.name+': PSI '+a.psi+', '+b.label+'" style="--c:var('+b.c+')" transform="translate('+(a.cx-69)+','+(a.cy-44)+')">'+
+      '<rect class="focus" x="-8" y="-8" width="154" height="104" rx="12"/>'+
+      '<rect class="ring" x="-8" y="-8" width="154" height="104" rx="12"/>'+
+      '<rect class="box" width="138" height="88" rx="6"/>'+
+      '<text class="mk-name" x="69" y="21">'+a.name.toUpperCase()+'</text>'+
+      '<text class="mk-num" x="69" y="57">'+a.psi+'</text>'+
+      '<text class="mk-lab" x="69" y="79">'+b.label+'</text></g>';
+  }
+  function renderMap(){
+    var regions=AREAS.map(function(a){
+      var b=BANDS[bandIdx(a.psi)];
+      var p='<path class="region" data-region="'+a.id+'" style="--c:var('+b.c+')" d="'+a.d+'"/>';
+      if(a.extra)p+='<path class="region" data-region="'+a.id+'" style="--c:var('+b.c+')" d="'+a.extra+'"/>';
+      return p;
+    }).join('');
+    var south=area('south');
+    var leader='<line class="leader" x1="'+south.leader[0]+'" y1="'+(south.leader[1]+6)+'" x2="'+south.cx+'" y2="'+(south.cy-44)+'"/><circle class="leader-dot" cx="'+south.leader[0]+'" cy="'+south.leader[1]+'" r="5"/>';
+    $('map').innerHTML='<svg viewBox="0 0 866 590" role="group" aria-label="Map of Singapore showing PSI for the north, south, east, west and central areas">'+
+      '<text class="map-note" x="433" y="35" text-anchor="middle">Johor, Malaysia</text>'+
+      '<text class="map-note" x="19" y="566">Singapore Strait</text>'+
+      regions+leader+AREAS.map(markCard).join('')+'</svg>';
+  }
+  function renderDetail(){
+    var a=area(S.sel), bi=bandIdx(a.psi), b=BANDS[bi];
+    var cells=BANDS.map(function(x,i){
+      return '<div class="cell'+(i===bi?' on':'')+'" style="--c:var('+x.c+')"><div class="trk"><span class="pl"></span></div><span class="lb">'+x.cut+'</span></div>';
+    }).join('');
+    $('detail').innerHTML=
+      '<div class="eb">'+a.name+' · e.g. '+a.eg+'</div>'+
+      '<div class="dp-num"><span class="big num">'+a.psi+'</span><span class="band" style="--c:var('+b.c+')"><i></i>'+b.label+'</span></div>'+
+      '<div class="scale" role="img" aria-label="PSI scale, current band '+b.label+'">'+cells+'</div>'+
+      '<p class="advice">'+b.advice+'</p>'+
+      '<dl class="dstats">'+
+        '<div><dt>PM2.5, 24 h</dt><dd>'+a.pm25+' μg/m³</dd></div>'+
+        '<div><dt>PM10, 24 h</dt><dd>'+a.pm10+' μg/m³</dd></div>'+
+        '<div><dt>Main pollutant</dt><dd>'+mainPollutant(a)+'</dd></div>'+
+      '</dl>';
+  }
+  function renderLegend(){
+    $('legend').innerHTML=BANDS.map(function(b){return '<span style="--c:var('+b.c+')"><i></i>'+b.label+' '+b.range+'</span>'}).join('');
+    $('hazefoot').textContent='Reading for '+READING+' SGT, updated '+UPDATED+'. Area boundaries are approximate. PSI is a 24-hour measure and NEA updates it every hour. Tap an area for details.';
+  }
+
+  /* ===== Singapore weather ===== */
+  function renderWeather(){
+    var c=CITIES[0], w=wmo(c.code);
+    $('wxnow').innerHTML=
+      '<div class="ban tall">'+scene(w.s,3)+'<span class="chip l">'+w.t+'</span><span class="chip r num">Now · '+c.time+' SGT</span></div>'+
+      '<div class="pbody">'+
+        '<div class="now-row"><div><div class="now-temp num">'+T(c.t)+'</div><div class="now-cond">'+w.t+'</div></div>'+
+          '<div class="hl num">High '+T(c.hi)+'<br>Low '+T(c.lo)+'</div></div>'+
+        '<dl class="mstats">'+
+          '<div><dt>Feels like</dt><dd class="num">'+T(c.feel)+'</dd></div>'+
+          '<div><dt>Humidity</dt><dd class="num">'+c.rh+'%</dd></div>'+
+          '<div><dt>Wind</dt><dd class="num">'+Math.round(c.wind)+' km/h<small>from '+cardinal(c.dir)+'</small></dd></div>'+
+          '<div><dt>Cloud cover</dt><dd class="num">'+c.cloud+'%</dd></div>'+
+          '<div><dt>Rain chance</dt><dd class="num">'+c.pop+'%<small>today</small></dd></div>'+
+          '<div><dt>UV index</dt><dd class="num">'+Math.round(c.uv)+'<small>'+uvLevel(c.uv)+', today</small></dd></div>'+
+        '</dl>'+
+        '<div class="suntimes num"><span>Sunrise '+c.rise+'</span><span>Sunset '+c.set+'</span></div>'+
+      '</div>';
+    $('wxhours').innerHTML=
+      '<div class="cap">Next 9 hours</div>'+
+      '<div class="hours" role="list">'+HOURLY.map(function(h,i){
+        var hw=wmo(h[2]);
+        return '<div class="hr'+(i===0?' now':'')+'" role="listitem"><span class="t">'+(i===0?'Now':h[0])+'</span>'+icon(hw.i)+'<span class="d num">'+T(h[1])+'</span><span class="r num">'+h[3]+'% rain</span></div>';
+      }).join('')+'</div>'+
+      '<p class="hr-note">Chance of rain is shown under each hour. Showers are expected from about 3 PM.</p>';
+  }
+
+  /* ===== ASEAN weather ===== */
+  function renderChips(){
+    $('chips').innerHTML=GROUPS.map(function(g){
+      var n=g.k==='all'?CITIES.length:CITIES.filter(function(c){return wmo(c.code).g===g.k}).length;
+      return '<button type="button" data-group="'+g.k+'" aria-pressed="'+(S.group===g.k)+'">'+g.l+'<span class="n">'+n+'</span></button>';
+    }).join('');
+  }
+  function renderCities(){
+    var q=S.q.trim().toLowerCase();
+    var list=CITIES.filter(function(c){
+      if(S.group!=='all'&&wmo(c.code).g!==S.group)return false;
+      return !q||(c.name+' '+COUNTRY[c.cc]).toLowerCase().indexOf(q)>-1;
+    });
+    list.sort(function(a,b){
+      if(S.sort==='name')return a.name.localeCompare(b.name);
+      if(S.sort==='hot')return b.t-a.t;
+      if(S.sort==='humid')return b.rh-a.rh;
+      if(S.sort==='rain')return b.pop-a.pop;
+      if(S.sort==='wind')return b.wind-a.wind;
+      return a.i-b.i;
+    });
+    if(!list.length){$('cities').innerHTML='<div class="empty">No cities match. Try a different name or condition.</div>';return}
+    var psis=AREAS.map(function(a){return a.psi}), hi=Math.max.apply(null,psis), lo=Math.min.apply(null,psis), sb=BANDS[bandIdx(hi)];
+    $('cities').innerHTML=list.map(function(c){
+      var w=wmo(c.code);
+      var extra=c.name==='Singapore'?'<div class="sg-haze" style="--c:var('+sb.c+')"><i></i><span class="num">PSI '+lo+'–'+hi+' · '+sb.label+' · NEA</span></div>':'';
+      return '<article class="card city">'+
+        '<div class="ban">'+scene(w.s,c.i)+'<span class="chip l">'+w.t+'</span><span class="chip r num">'+c.time+' local</span></div>'+
+        '<div class="cbody">'+
+          '<div><div class="cap">'+COUNTRY[c.cc]+'</div><h3>'+c.name+'</h3></div>'+
+          '<div class="tline"><div><div class="tmp num">'+T(c.t)+'</div><div class="cd">Feels like '+T(c.feel)+'</div></div><div class="hl num">High '+T(c.hi)+'<br>Low '+T(c.lo)+'</div></div>'+
+          '<dl class="mini">'+
+            '<div><dt>Humidity</dt><dd class="num">'+c.rh+'%</dd></div>'+
+            '<div><dt>Wind</dt><dd class="num">'+Math.round(c.wind)+' km/h<small>'+cardinal(c.dir)+'</small></dd></div>'+
+            '<div><dt>Cloud</dt><dd class="num">'+c.cloud+'%</dd></div>'+
+            '<div><dt>Rain</dt><dd class="num">'+c.pop+'%<small>chance today</small></dd></div>'+
+            '<div><dt>UV</dt><dd class="num">'+Math.round(c.uv)+'<small>'+uvLevel(c.uv)+'</small></dd></div>'+
+            '<div><dt>Rain now</dt><dd class="num">'+c.rainmm.toFixed(1)+' mm</dd></div>'+
+          '</dl>'+
+          '<div class="sun num"><span>Rise '+c.rise+'</span><span>Set '+c.set+'</span></div>'+
+          extra+
+        '</div></article>';
+    }).join('');
+  }
+
+  $('sources').textContent='Haze: PSI and PM2.5 (24-hour) from the National Environment Agency via data.gov.sg, for Singapore only, reading for '+READING+' SGT on 28 Oct 2026. Weather: Open-Meteo, observed around 10:30 SGT (each city shows its own local time). Weather pictures are illustrations of the reported condition. This page shows a snapshot taken when it was built and does not refresh itself.';
+
+  /* ===== Tabs ===== */
+  var TABS=['singapore','asean'];
+  function show(name){
+    S.tab=name;
+    TABS.forEach(function(n){
+      $('view-'+n).hidden=n!==name;
+      var t=$('tab-'+n); t.setAttribute('aria-selected',String(n===name)); t.tabIndex=n===name?0:-1;
+    });
+  }
+  function fromHash(){var h='';try{h=location.hash.slice(1)}catch(e){}return h==='asean'?'asean':'singapore'}
+  function go(name){show(name);try{if(location.hash!=='#'+name)location.hash=name}catch(e){}}
+  window.addEventListener('hashchange',function(){show(fromHash())});
+
+  /* ===== Events ===== */
+  function pick(id){S.sel=id;renderMap();renderDetail()}
+  document.addEventListener('click',function(e){
+    var tb=e.target.closest('[data-tab]');
+    if(tb){go(tb.getAttribute('data-tab'));return}
+    var r=e.target.closest('[data-region]');
+    if(r){pick(r.getAttribute('data-region'));return}
+    var u=e.target.closest('[data-unit]');
+    if(u){
+      S.unit=u.getAttribute('data-unit');
+      document.querySelectorAll('[data-unit]').forEach(function(b){b.setAttribute('aria-pressed',String(b===u))});
+      renderWeather();renderCities();return;
+    }
+    var g=e.target.closest('[data-group]');
+    if(g){S.group=g.getAttribute('data-group');renderChips();renderCities()}
+  });
+  document.addEventListener('keydown',function(e){
+    var t=e.target;
+    if((e.key==='Enter'||e.key===' ')&&t&&t.getAttribute&&t.getAttribute('role')==='button'&&t.getAttribute('data-region')){
+      e.preventDefault();pick(t.getAttribute('data-region'));
+      var again=document.querySelector('g.mk[data-region="'+S.sel+'"]');if(again)again.focus();
+      return;
+    }
+    if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&t&&t.getAttribute&&t.getAttribute('role')==='tab'){
+      var next=TABS[(TABS.indexOf(S.tab)+(e.key==='ArrowRight'?1:TABS.length-1))%TABS.length];
+      go(next);$('tab-'+next).focus();
+    }
+  });
+  $('q').addEventListener('input',function(e){S.q=e.target.value;renderCities()});
+  $('sort').addEventListener('change',function(e){S.sort=e.target.value;renderCities()});
+
+  renderMap();renderDetail();renderLegend();renderWeather();renderChips();renderCities();
+  show(fromHash());
+})();
+</script>
+</body>
+</html>
